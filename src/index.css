@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Plus Jakarta Sans", sans-serif;
+  --font-label: "Plus Jakarta Sans", sans-serif;
+
+  --color-surface: #f9f5ff;
+  --color-on-surface: #2b2a51;
+  --color-on-surface-variant: #585781;
+  --color-primary: #4556a4;
+  --color-primary-container: #93a4f8;
+  --color-on-primary: #f2f1ff;
+  --color-secondary: #5a6000;
+  --color-on-secondary: #f1fc6a;
+  --color-secondary-container: #e0eb5c;
+  --color-on-secondary-container: #505600;
+  --color-surface-container-low: #f2efff;
+  --color-surface-container-high: #e2dfff;
+  --color-surface-container-highest: #dcd9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-variant: #dcd9ff;
+  --color-error: #b41340;
+  --color-error-container: #f74b6d;
+  --color-on-error-container: #510017;
+  --color-tertiary: #a93000;
+  --color-tertiary-container: #ff9472;
+  --color-on-tertiary-container: #5e1700;
+  --color-outline: #74739e;
+  --color-outline-variant: #aba9d7;
+
+  --color-emerald-container: #d1fae5;
+  --color-on-emerald-container: #065f46;
+  --color-amber-container: #fef3c7;
+  --color-on-amber-container: #92400e;
+  --color-rose-container: #ffe4e6;
+  --color-on-rose-container: #9f1239;
+
+  --radius-lg: 2rem;
+  --radius-xl: 3rem;
+  
+  --shadow-tactile: 0 8px 24px 0 rgba(43, 42, 81, 0.05);
+  --shadow-active: 0 8px 24px 0 rgba(43, 42, 81, 0.15);
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface antialiased;
+    font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
