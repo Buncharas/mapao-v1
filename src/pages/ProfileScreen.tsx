@@ -16,12 +16,23 @@ export function ProfileScreen() {
 
   const colors = getAvatarColor(user.id, user.avatarColorIndex);
   const currentBanner = bannerGradients[user.bannerGradientIndex || 0];
-  const [availability, setAvailability] = useState<Record<string, AvailabilityStatus[]>>({
-    Monday: ['Definitely', 'Unavailable', 'Probably'],
-    Tuesday: ['Probably', 'Definitely', 'Unavailable'],
-    Wednesday: ['Definitely', 'Probably', 'Unavailable'],
-    Thursday: ['Unavailable', 'Definitely', 'Probably'],
-    Friday: ['Probably', 'Probably', 'Definitely'],
+  
+  const [availability, setAvailability] = useState<Record<string, AvailabilityStatus[]>>(() => {
+    const saved = localStorage.getItem(`mapao_availability_${user.id}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse availability', e);
+      }
+    }
+    return {
+      Monday: ['Unavailable', 'Unavailable', 'Unavailable'],
+      Tuesday: ['Unavailable', 'Unavailable', 'Unavailable'],
+      Wednesday: ['Unavailable', 'Unavailable', 'Unavailable'],
+      Thursday: ['Unavailable', 'Unavailable', 'Unavailable'],
+      Friday: ['Unavailable', 'Unavailable', 'Unavailable'],
+    };
   });
 
   const toggleStatus = (day: string, index: number) => {
@@ -30,7 +41,9 @@ export function ProfileScreen() {
       const newDay = [...prev[day]];
       const currentIdx = statuses.indexOf(newDay[index]);
       newDay[index] = statuses[(currentIdx + 1) % 3];
-      return { ...prev, [day]: newDay };
+      const newState = { ...prev, [day]: newDay };
+      localStorage.setItem(`mapao_availability_${user.id}`, JSON.stringify(newState));
+      return newState;
     });
   };
 
@@ -99,11 +112,11 @@ export function ProfileScreen() {
           <div className="flex gap-4 mt-6">
             <div className="bg-surface-container-lowest px-4 py-2 rounded-full flex items-center gap-2 shadow-sm">
               <MapPin className="w-4 h-4 text-primary" />
-              <span className="font-semibold text-primary text-sm">{user.campus || "Campus North"}</span>
+              <span className="font-semibold text-primary text-sm">{user.campus || "Chula University"}</span>
             </div>
             <div className="bg-surface-container-lowest px-4 py-2 rounded-full flex items-center gap-2 shadow-sm">
               <School className="w-4 h-4 text-secondary" />
-              <span className="font-semibold text-secondary-dim text-sm">{user.year || "Junior Year"}</span>
+              <span className="font-semibold text-secondary-dim text-sm">{user.year || "3rd Year"}</span>
             </div>
           </div>
         </section>
@@ -188,31 +201,14 @@ export function ProfileScreen() {
           <h3 className="font-headline font-bold text-xl text-primary mb-6 flex items-center gap-2">
             <Award className="w-5 h-5" /> Achievements
           </h3>
-          <div className="grid grid-cols-3 gap-4">
-            <AchievementCard 
-              icon={Star} 
-              title="Punctual Pro" 
-              desc="20x On-Time" 
-              color="bg-[#FFF9C4]" 
-              iconColor="text-[#FBC02D]"
-              borderColor="border-[#FFD700]/40"
-            />
-            <AchievementCard 
-              icon={Users} 
-              title="Team Player" 
-              desc="10 Collabs" 
-              color="bg-[#F5F5F5]" 
-              iconColor="text-[#9E9E9E]"
-              borderColor="border-[#C0C0C0]/40"
-            />
-            <AchievementCard 
-              icon={Map} 
-              title="Explorer" 
-              desc="5 New Spots" 
-              color="bg-[#EFEBE9]" 
-              iconColor="text-[#8D6E63]"
-              borderColor="border-[#CD7F32]/40"
-            />
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center bg-surface-container-lowest rounded-2xl border-2 border-dashed border-outline-variant/30">
+            <div className="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center mb-4">
+              <Star className="w-8 h-8 text-on-surface-variant/30" />
+            </div>
+            <h4 className="font-bold text-on-surface text-lg">No achievements yet</h4>
+            <p className="text-on-surface-variant/60 text-sm mt-1 max-w-[200px]">
+              Start creating events to earn your own achievements!
+            </p>
           </div>
         </section>
 
@@ -246,14 +242,3 @@ function StatusChip({ status, onClick }: { status: AvailabilityStatus; onClick: 
   );
 }
 
-function AchievementCard({ icon: Icon, title, desc, color, iconColor, borderColor }: any) {
-  return (
-    <div className={`bg-surface-container-lowest rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-tactile border-b-4 ${borderColor}`}>
-      <div className={`w-16 h-16 rounded-full ${color} flex items-center justify-center mb-3`}>
-        <Icon className={`w-8 h-8 ${iconColor}`} />
-      </div>
-      <span className="font-bold text-sm text-on-surface">{title}</span>
-      <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mt-1">{desc}</span>
-    </div>
-  );
-}

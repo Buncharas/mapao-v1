@@ -1,9 +1,9 @@
 import { ArrowLeft, Settings, Sparkles, Calendar, Clock, MapPin, BookOpen, Users, Gamepad2, Plus, ArrowRight, MessageCircle, Phone, Briefcase, Utensils, Dumbbell, Plane, Star, Info, Check, Edit2, X, Search, PartyPopper, Coffee, Music, Code, Camera, Book, Flag, Heart, Trophy, Zap, Ghost, Moon, Sun } from 'lucide-react';
 import { IMAGES } from '../constants';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { BottomNav } from '../components/BottomNav';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn, getAvatarColor, getInitials } from '../lib/utils';
 import { useApp } from '../context/AppContext';
 import { getEventIcon, CUSTOM_ICONS_LIST } from '../lib/iconMapping';
@@ -21,7 +21,8 @@ interface Participant {
 
 export function CreateEventScreen() {
   const navigate = useNavigate();
-  const { addEvent, user, isSettingsOpen, toggleSettings } = useApp();
+  const { id } = useParams();
+  const { addEvent, updateEvent, events, user, isSettingsOpen, toggleSettings } = useApp();
   const colors = getAvatarColor(user.id, user.avatarColorIndex);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +39,32 @@ export function CreateEventScreen() {
     participants: [] as Participant[],
   });
 
+  const isEditMode = !!id;
+
+  useEffect(() => {
+    if (isEditMode && events.length > 0) {
+      const eventToEdit = events.find(e => e.id === id);
+      if (eventToEdit) {
+        setFormData({
+          title: eventToEdit.title,
+          type: eventToEdit.type as EventType,
+          customTypeName: eventToEdit.customTypeName || '',
+          customTypeIcon: eventToEdit.customTypeIcon || 'PartyPopper',
+          date: eventToEdit.date,
+          time: eventToEdit.time,
+          location: eventToEdit.location,
+          priority: eventToEdit.priority as Priority,
+          participants: eventToEdit.participants.filter(p => p.id !== eventToEdit.hostId).map(p => ({
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar,
+            type: 'LINE' // Defaulting back to LINE if not specified since AppEvent Participant doesn't have 'type'
+          })) as Participant[]
+        });
+      }
+    }
+  }, [id, events, isEditMode]);
+
   const [draftCustomTypeName, setDraftCustomTypeName] = useState(formData.customTypeName);
   const [draftCustomTypeIcon, setDraftCustomTypeIcon] = useState(formData.customTypeIcon);
 
@@ -52,7 +79,7 @@ export function CreateEventScreen() {
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
   const handleSendInvite = () => {
-    addEvent({
+    const payload = {
       title: formData.title || 'Untitled Event',
       type: formData.type,
       customTypeName: formData.customTypeName,
@@ -61,20 +88,36 @@ export function CreateEventScreen() {
       time: formData.time,
       location: formData.location || 'No Location',
       priority: formData.priority,
-    });
-    navigate('/dashboard');
+      participants: formData.participants.map(p => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        status: 'pending' as const
+      }))
+    };
+
+    if (isEditMode && id) {
+      updateEvent(id, payload);
+      navigate(-1);
+    } else {
+      addEvent(payload);
+      navigate('/dashboard');
+    }
   };
 
   const favorites: Participant[] = [
-    { id: '1', name: 'Emma Watson', avatar: IMAGES.AVATAR_EMMA, type: 'LINE' },
-    { id: '2', name: 'Mike Ross', avatar: IMAGES.AVATAR_MIKE, type: 'Phone' },
+    ...(user.id === 'user_1' 
+      ? [{ id: '1', name: 'S. Boss-man', type: 'LINE' as const }]
+      : [{ id: 'user_1', name: 'P. Buncharas', type: 'LINE' as const }]
+    ),
+    { id: '2', name: 'annabemee', type: 'Phone' },
   ];
 
   const recent: Participant[] = [
-    { id: '3', name: 'Sarah J.', avatar: IMAGES.AVATAR_SARAH, type: 'LINE' },
-    { id: '4', name: 'Alex T.', type: 'Phone' },
-    { id: '5', name: 'James Wilson', type: 'LINE' },
-    { id: '6', name: 'Olivia Brown', type: 'Phone' },
+    { id: '3', name: 'qreiissss', type: 'LINE' },
+    { id: '4', name: 'primpraowsss', type: 'Phone' },
+    { id: '5', name: 'sarisaaa__', type: 'LINE' },
+    { id: '6', name: 'i.arin.u', type: 'Phone' },
   ];
 
   const allContacts = [...favorites, ...recent];
@@ -167,7 +210,9 @@ export function CreateEventScreen() {
               className="flex flex-col gap-8"
             >
               <section className="flex flex-col gap-2">
-                <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight">Event Details</h2>
+                <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight">
+                  {isEditMode ? 'Edit Event' : 'Event Details'}
+                </h2>
                 <p className="text-on-surface-variant font-medium">Start with the basics of your gathering.</p>
               </section>
 
@@ -304,51 +349,45 @@ export function CreateEventScreen() {
                   </motion.div>
                 )}
 
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-4">
                   <div className="flex justify-between items-center">
                     <label className="font-label text-sm font-bold uppercase tracking-widest text-on-surface">Participants</label>
-                    <button 
-                      onClick={() => setShowParticipantSelector(true)}
-                      className="bg-primary/10 text-primary p-2 rounded-full hover:bg-primary/20 transition-colors shadow-sm active:scale-90"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
                   </div>
                   
-                  <div className="flex flex-wrap gap-4 min-h-[80px] p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-inner">
+                  <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-inner overflow-hidden">
                     {formData.participants.length > 0 ? (
-                      formData.participants.map((p) => (
-                        <div key={p.id} className="relative group">
-                          <ParticipantCircle p={p} />
-                          <button 
-                            onClick={() => removeParticipant(p.id)}
-                            className="absolute -top-1 -right-1 bg-error-container text-on-error-container p-1 rounded-full shadow-active scale-0 group-hover:scale-100 transition-transform"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="w-full flex flex-col items-center justify-center py-4 border-2 border-dashed border-outline-variant/30 rounded-xl">
-                        <Users className="w-8 h-8 text-outline mb-2 opacity-30" />
-                        <span className="text-xs font-bold text-outline uppercase tracking-widest opacity-50">No participants added yet</span>
+                      <div className="flex flex-wrap gap-4 p-4 min-h-[100px]">
+                        {formData.participants.map((p) => (
+                          <div key={p.id} className="relative group">
+                            <ParticipantCircle p={p} />
+                            <button 
+                              onClick={() => removeParticipant(p.id)}
+                              className="absolute top-0 right-0 bg-error text-on-error p-1 rounded-full shadow-active scale-0 group-hover:scale-100 transition-transform z-10"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          onClick={() => setShowParticipantSelector(true)}
+                          className="w-14 h-14 rounded-full border-2 border-dashed border-primary/30 flex items-center justify-center text-primary hover:bg-primary/5 transition-colors active:scale-90"
+                          title="Add more participants"
+                        >
+                          <Plus className="w-6 h-6" />
+                        </button>
                       </div>
+                    ) : (
+                      <button 
+                        onClick={() => setShowParticipantSelector(true)}
+                        className="w-full flex flex-col items-center justify-center py-10 hover:bg-primary/5 transition-colors group"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                          <Plus className="w-6 h-6 text-primary" />
+                        </div>
+                        <span className="text-sm font-bold text-primary uppercase tracking-widest">Add Participants</span>
+                        <p className="text-[10px] text-on-surface-variant/40 mt-1 font-bold">Invite via LINE or Phone</p>
+                      </button>
                     )}
-                  </div>
-
-                  <div className="flex gap-4 mt-2">
-                    <button 
-                      onClick={() => setShowParticipantSelector(true)}
-                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-br from-primary to-primary-container text-white p-4 rounded-2xl shadow-sm text-sm font-bold active:scale-95 transition-transform"
-                    >
-                      <MessageCircle className="w-5 h-5 fill-current" /> LINE
-                    </button>
-                    <button 
-                      onClick={() => setShowParticipantSelector(true)}
-                      className="flex-1 flex items-center justify-center gap-2 bg-surface-container-highest text-primary p-4 rounded-2xl shadow-sm text-sm font-bold active:scale-95 transition-transform"
-                    >
-                      <Phone className="w-5 h-5" /> Phone
-                    </button>
                   </div>
                 </div>
               </div>
@@ -364,7 +403,9 @@ export function CreateEventScreen() {
               className="flex flex-col gap-8"
             >
               <section className="flex flex-col gap-2">
-                <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight">Event Details</h2>
+                <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight">
+                  {isEditMode ? 'Edit Schedule' : 'Event Details'}
+                </h2>
                 <p className="text-on-surface-variant font-medium">Let's lock in the specifics for your gathering.</p>
               </section>
 
@@ -537,7 +578,7 @@ export function CreateEventScreen() {
               currentStep === 1 && "ml-auto"
             )}
           >
-            {currentStep === 4 ? 'Send Invite' : 'Continue'} <ArrowRight className="w-4 h-4" />
+            {currentStep === 4 ? (isEditMode ? 'Save Changes' : 'Send Invite') : 'Continue'} <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </main>

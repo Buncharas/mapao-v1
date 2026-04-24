@@ -5,6 +5,7 @@
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { WelcomeScreen } from './pages/WelcomeScreen';
+import { SelectIdentityScreen } from './pages/SelectIdentityScreen';
 import { DashboardScreen } from './pages/DashboardScreen';
 import { ProfileScreen } from './pages/ProfileScreen';
 import { CreateEventScreen } from './pages/CreateEventScreen';
@@ -23,6 +24,10 @@ function AppRoutes() {
           element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <WelcomeScreen />} 
         />
         <Route 
+          path="/select-identity" 
+          element={<SelectIdentityScreen />} 
+        />
+        <Route 
           path="/dashboard" 
           element={isAuthenticated ? <DashboardScreen /> : <Navigate to="/" replace />} 
         />
@@ -32,6 +37,10 @@ function AppRoutes() {
         />
         <Route 
           path="/create" 
+          element={isAuthenticated ? <CreateEventScreen /> : <Navigate to="/" replace />} 
+        />
+        <Route 
+          path="/edit/:id" 
           element={isAuthenticated ? <CreateEventScreen /> : <Navigate to="/" replace />} 
         />
         <Route 

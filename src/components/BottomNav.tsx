@@ -2,11 +2,16 @@ import { Home, PlusCircle, Bell, User } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
+import { useApp } from '../context/AppContext';
+
 export function BottomNav() {
+  const { notifications } = useApp();
+  const hasUnread = notifications.some(n => n.unread);
+
   const navItems = [
     { to: '/dashboard', icon: Home, label: 'Home' },
     { to: '/create', icon: PlusCircle, label: 'Create' },
-    { to: '/alerts', icon: Bell, label: 'Alerts' },
+    { to: '/alerts', icon: Bell, label: 'Alerts', badge: hasUnread },
     { to: '/profile', icon: User, label: 'Profile' },
   ];
 
@@ -27,7 +32,15 @@ export function BottomNav() {
         >
           {({ isActive }) => (
             <>
-              <item.icon className={cn("w-6 h-6", isActive ? "mb-0" : "mb-1")} />
+              <div className="relative">
+                <item.icon className={cn("w-6 h-6", isActive ? "mb-0" : "mb-1")} />
+                {item.badge && (
+                  <div className={cn(
+                    "absolute top-0 right-0 w-2.5 h-2.5 bg-error rounded-full border-2 border-surface",
+                    isActive ? "transform -translate-y-1 translate-x-1" : ""
+                  )} />
+                )}
+              </div>
               {!isActive && (
                 <span className="font-label text-[10px] font-bold uppercase tracking-widest leading-none">
                   {item.label}

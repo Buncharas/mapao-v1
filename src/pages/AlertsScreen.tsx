@@ -6,25 +6,52 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { useState } from 'react';
 import { getAvatarColor, getInitials, cn } from '../lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 type FilterType = 'all' | 'invitations' | 'updates';
 
 export function AlertsScreen() {
-  const { user, notifications, markNotificationRead, handleNotificationAction } = useApp();
+  const navigate = useNavigate();
+  const { user, notifications, markNotificationRead, events } = useApp();
   const [activeTab, setActiveTab] = useState<FilterType>('all');
 
   const getSenderName = (id: string) => {
-    if (id === 'sarah_1') return 'Sarah Jenkins';
-    if (id === 'emma_1') return 'Emma';
-    return 'User';
+    const contacts: Record<string, string> = {
+      'user_1': 'P. Buncharas',
+      '1': 'S. Boss-man',
+      '2': 'annabemee',
+      '3': 'qreiissss',
+      '4': 'primpraowsss',
+      '5': 'sarisaaa__',
+      '6': 'i.arin.u',
+      'emma_1': 'S. Boss-man',
+      'sarah_1': 'qreiissss'
+    };
+    return contacts[id] || 'User';
   };
 
   const filteredNotifications = notifications.filter(notif => {
+    // Hide invitation notifications if the user has already responded
+    if (notif.type === 'invitation' && notif.eventId) {
+      const event = events.find(e => e.id === notif.eventId);
+      if (event) {
+        const me = event.participants.find(p => p.id === user.id);
+        if (me && me.status !== 'pending') return false;
+      }
+    }
+
     if (activeTab === 'all') return true;
-    if (activeTab === 'invitations') return notif.type === 'invite';
+    if (activeTab === 'invitations') return notif.type === 'invitation';
     if (activeTab === 'updates') return ['update', 'cancel', 'reminder'].includes(notif.type);
     return true;
   });
+
+  const handleNotificationClick = (notif: typeof notifications[0]) => {
+    markNotificationRead(notif.id);
+    if (notif.eventId) {
+      navigate(`/event-detail/${notif.eventId}`);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-surface pb-32">
@@ -85,8 +112,8 @@ export function AlertsScreen() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    onClick={() => markNotificationRead(notif.id)}
-                    className={`bg-surface-container-lowest rounded-[2rem] p-5 shadow-tactile relative flex gap-4 items-start ${!notif.unread ? "opacity-60 grayscale-[0.2]" : ""}`}
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`bg-surface-container-lowest rounded-[2rem] p-5 shadow-tactile relative flex gap-4 items-center cursor-pointer active:scale-[0.99] transition-all ${!notif.unread ? "opacity-60 grayscale-[0.2]" : ""}`}
                   >
                     {notif.unread && (
                       <div className="absolute top-5 right-5 w-3 h-3 bg-error-container rounded-full ring-2 ring-white" />
@@ -107,36 +134,14 @@ export function AlertsScreen() {
                     </div>
                     <div className="flex-1">
                       <h3 className="font-headline font-bold text-on-surface text-lg mb-1 leading-tight">{notif.title}</h3>
-                      <p className="text-on-surface-variant text-sm font-medium leading-relaxed mb-3">
+                      <p className="text-on-surface-variant text-sm font-medium leading-relaxed">
                         {notif.desc}
                       </p>
-                      {notif.actions ? (
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNotificationAction(notif.id, 'accept');
-                            }}
-                            className="px-5 py-2 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-full font-bold text-xs shadow-active hover:opacity-90 active:scale-95 transition-all"
-                          >
-                            Accept
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNotificationAction(notif.id, 'decline');
-                            }}
-                            className="px-5 py-2 bg-surface-container-high text-on-surface rounded-full font-bold text-xs hover:bg-surface-container-highest active:scale-95 transition-all"
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-outline font-bold uppercase tracking-widest ">
-                          {notif.time}
-                        </p>
-                      )}
+                      <p className="text-[10px] text-outline font-bold uppercase tracking-widest mt-2">
+                        {notif.time}
+                      </p>
                     </div>
+                    <ChevronRight className="w-5 h-5 text-outline-variant" />
                   </motion.div>
                 ))}
               </motion.div>
@@ -167,7 +172,7 @@ export function AlertsScreen() {
 
 function getIcon(type: string) {
   switch (type) {
-    case 'invite': return <Users className="w-6 h-6 fill-current" />;
+    case 'invitation': return <Users className="w-6 h-6 fill-current" />;
     case 'reminder': return <AlarmClock className="w-6 h-6 fill-current" />;
     case 'update': return <RefreshCcw className="w-6 h-6" />;
     case 'cancel': return <XCircle className="w-6 h-6" />;
@@ -177,7 +182,7 @@ function getIcon(type: string) {
 
 function getIconColor(type: string) {
   switch (type) {
-    case 'invite': return 'bg-primary-container/20 text-primary';
+    case 'invitation': return 'bg-primary-container/20 text-primary';
     case 'reminder': return 'bg-secondary-container/20 text-secondary';
     case 'update': return 'bg-secondary-container/30 text-on-secondary-container';
     default: return 'bg-surface-variant text-on-surface-variant';
