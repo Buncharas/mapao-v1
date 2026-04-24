@@ -59,7 +59,7 @@ interface User {
   bannerGradientIndex?: number;
 }
 
-const USERS: User[] = [
+const DEFAULT_USERS: User[] = [
   {
     id: 'user_1',
     name: 'P. Buncharas',
@@ -110,6 +110,18 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('mapao_users');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse users', e);
+      }
+    }
+    return DEFAULT_USERS;
+  });
+
   const [currentUserId, setCurrentUserId] = useState(() => {
     return localStorage.getItem('mapao_user_id') || 'user_1';
   });
@@ -118,11 +130,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem('mapao_auth') === 'true';
   });
 
-  const user = USERS.find(u => u.id === currentUserId) || USERS[0];
+  const user = users.find(u => u.id === currentUserId) || users[0];
 
   const updateUser = (data: Partial<User>) => {
-    // In a real app we'd update USERS or save to DB
-    // For simulation, we'll just ignore or could use another state
+    setUsers(prevUsers => {
+      const newUsers = prevUsers.map(u => {
+        if (u.id === currentUserId) {
+          return { ...u, ...data };
+        }
+        return u;
+      });
+      localStorage.setItem('mapao_users', JSON.stringify(newUsers));
+      return newUsers;
+    });
   };
 
   const login = (userId: string) => {
@@ -400,7 +420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       user,
-      users: USERS,
+      users,
       events: userEvents,
       notifications: userNotifications,
       isAuthenticated,

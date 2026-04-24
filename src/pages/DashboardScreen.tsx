@@ -11,7 +11,7 @@ import { getEventIcon } from '../lib/iconMapping';
 
 export function DashboardScreen() {
   const navigate = useNavigate();
-  const { events, updateEventStatus, user } = useApp();
+  const { events, updateEventStatus, user, users } = useApp();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date('2026-04-24'));
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -47,8 +47,14 @@ export function DashboardScreen() {
   });
 
   const getHostName = (event: typeof events[0]) => {
+    // Priority 1: Live user data
+    const liveHost = users.find(u => u.id === event.hostId);
+    if (liveHost) return liveHost.name;
+
+    // Priority 2: Snapshot in participants
     const host = event.participants.find(p => p.id === event.hostId);
     if (host) return host.name;
+    
     const contacts: Record<string, string> = {
       'user_1': 'P. Buncharas',
       '1': 'S. Boss-man',

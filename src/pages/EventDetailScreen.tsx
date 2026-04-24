@@ -10,7 +10,7 @@ import { getEventIcon } from '../lib/iconMapping';
 export function EventDetailScreen() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { events, checkIn, updateEventStatus, user } = useApp();
+  const { events, checkIn, updateEventStatus, user, users } = useApp();
   const [scanning, setScanning] = useState(false);
   const [success, setSuccess] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -32,6 +32,14 @@ export function EventDetailScreen() {
       </div>
     );
   }
+
+  const getParticipantInfo = (p: { id: string; name: string; avatar?: string }) => {
+    const liveUser = users.find(u => u.id === p.id);
+    return {
+      name: liveUser?.name || p.name,
+      avatarColorIndex: liveUser?.avatarColorIndex
+    };
+  };
 
   const handleConfirm = () => {
     updateEventStatus(event.id, 'confirmed');
@@ -181,7 +189,9 @@ export function EventDetailScreen() {
             <span className="text-sm font-bold text-primary">{event.participants.filter(p => p.id !== event.hostId && (p.status === 'joined' || p.status === 'checked-in' || p.status === 'late')).length} Joined</span>
           </div>
           <div className={cn("space-y-3", isCancelled && "pointer-events-none")}>
-            {event.participants.map((p, idx) => (
+            {event.participants.map((p, idx) => {
+              const info = getParticipantInfo(p);
+              return (
               <div key={idx} className={cn(
                 "bg-surface-container-low rounded-2xl p-4 flex items-center justify-between shadow-sm transition-opacity",
                 (p.status === 'declined' || isCancelled) ? "opacity-50 grayscale" : ""
@@ -189,14 +199,14 @@ export function EventDetailScreen() {
                 <div className="flex items-center gap-4">
                   <div className={cn(
                     "w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container p-0.5 flex items-center justify-center",
-                    getAvatarColor(p.id, p.id === user.id ? user.avatarColorIndex : undefined).bg
+                    getAvatarColor(p.id, info.avatarColorIndex).bg
                   )}>
-                    <span className={cn("font-black text-xs", getAvatarColor(p.id, p.id === user.id ? user.avatarColorIndex : undefined).text)}>
-                      {getInitials(p.name)}
+                    <span className={cn("font-black text-xs", getAvatarColor(p.id, info.avatarColorIndex).text)}>
+                      {getInitials(info.name)}
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-on-surface">{p.name} {p.id === user.id && "(You)"}</p>
+                    <p className="text-sm font-bold text-on-surface">{info.name} {p.id === user.id && "(You)"}</p>
                     <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{p.role || 'Participant'}</p>
                   </div>
                 </div>
@@ -204,7 +214,7 @@ export function EventDetailScreen() {
                   <StatusBadge status={isCancelled ? 'cancelled' : (p.id === event.hostId ? 'host' : p.status)} lateTime={p.lateTime} />
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </section>
 
