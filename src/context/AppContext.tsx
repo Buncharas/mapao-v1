@@ -4,7 +4,7 @@ import { IMAGES } from '../constants';
 export type EventType = 'work' | 'meal' | 'exercise' | 'travel' | 'custom' | 'study' | 'meeting' | 'social' | 'Lecture';
 export type Priority = 'Casual' | 'Important' | 'Very Important';
 export type EventStatus = 'upcoming' | 'pending' | 'cancelled' | 'confirmed';
-export type ParticipantStatus = 'pending' | 'joined' | 'late' | 'checked-in' | 'declined';
+export type ParticipantStatus = 'pending' | 'joined' | 'late' | 'checked-in' | 'declined' | 'missed';
 
 export interface Participant {
   id: string;
@@ -13,6 +13,7 @@ export interface Participant {
   status: ParticipantStatus;
   role?: 'Host' | 'Participant';
   lateTime?: string;
+  checkInTime?: number;
 }
 
 export interface AppEvent {
@@ -130,13 +131,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem('mapao_auth') === 'true';
   });
 
-  const user = users.find(u => u.id === currentUserId) || users[0];
+  const [events, setEvents] = useState<AppEvent[]>(() => {
+    const saved = localStorage.getItem('mapao_events');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse events', e);
+      }
+    }
+    return [];
+  });
 
-  const updateUser = (data: Partial<User>) => {
+  // Derived stats helper
+  const calculateUserStats = (userId: string, allEvents: AppEvent[]) => {
+    let appointments = 0;
+    let onTime = 0;
+
+    allEvents.forEach(e => {
+      // Ignore cancelled events
+      if (e.status === 'cancelled') return;
+
+      const participant = e.participants.find(p => p.id === userId);
+      if (!participant) return;
+
+      // Event time has passed (start + 15 mins cutoff)
+      const [hours, minutes] = e.time.split(':').map(Number);
+      const eventStartTime = new Date();
+      eventStartTime.setHours(hours, minutes, 0, 0);
+      const passed = (Date.now() - eventStartTime.getTime()) / (1000 * 60) > 15;
+
+      if (passed) {
+        // Requirement: Host OR in confirmed list (joined, checked-in, late, missed)
+        // Non-participating roles (declined) or stale unconfirmed pending invitations are excluded
+        const isHost = e.hostId === userId;
+        const isConfirmed = ['joined', 'checked-in', 'late', 'missed'].includes(participant.status);
+
+        if (isHost || isConfirmed) {
+          appointments++;
+          if (participant.status === 'checked-in') {
+            onTime++;
+          }
+        }
+      }
+    });
+
+    const reliability = appointments > 0 ? Math.round((onTime / appointments) * 100) : 0;
+    return { appointments, onTime, reliability };
+  };
+
+  // Compute users with stats
+  const usersWithStats = React.useMemo(() => {
+    return users.map(u => {
+      const stats = calculateUserStats(u.id, events);
+      return { ...u, ...stats };
+    });
+  }, [users, events]);
+
+  const user = usersWithStats.find(u => u.id === currentUserId) || usersWithStats[0];
+
+  const updateUser = (data: Partial<User> | ((prev: User) => Partial<User>)) => {
     setUsers(prevUsers => {
       const newUsers = prevUsers.map(u => {
         if (u.id === currentUserId) {
-          return { ...u, ...data };
+          const updateData = typeof data === 'function' ? data(u) : data;
+          const updatedUser = { ...u, ...updateData };
+          // Stats are derived, so we don't need to manually calculate here
+          // but we keep the logic consistent if manual updates happen
+          return updatedUser;
         }
         return u;
       });
@@ -157,13 +219,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
   };
 
-  const [events, setEvents] = useState<AppEvent[]>([]);
+  // Persist events to localStorage
+  React.useEffect(() => {
+    localStorage.setItem('mapao_events', JSON.stringify(events));
+  }, [events]);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const toggleSettings = () => setIsSettingsOpen(prev => !prev);
+  
+  // Background logic to mark missed events and update totals
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setEvents(prevEvents => {
+        let changed = false;
+        const newEvents = prevEvents.map(e => {
+          // Only check non-cancelled events
+          if (e.status === 'cancelled') return e;
+
+          const [hours, minutes] = e.time.split(':').map(Number);
+          const eventStartTime = new Date();
+          eventStartTime.setHours(hours, minutes, 0, 0);
+
+          const diffInMinutes = (now.getTime() - eventStartTime.getTime()) / (1000 * 60);
+
+          // If more than 15 minutes passed
+          if (diffInMinutes > 15) {
+            let eventChanged = false;
+            const updatedParticipants = e.participants.map(p => {
+              // If participant is still pending or joined but hasn't checked in
+              if (p.id === user.id && (p.status === 'pending' || p.status === 'joined')) {
+                // Mark as missed if they were supposed to join
+                // Note: We only count it as an appointment if they WERE expected (joined or pending)
+                // Actually, the requirement says "For users still attendanceStatus = pending -> update to missed"
+                // and "Total Appointments: Count events where user is in event AND event time has passed"
+                eventChanged = true;
+                changed = true;
+                return { ...p, status: 'missed' as ParticipantStatus };
+              }
+              return p;
+            });
+
+            if (eventChanged) {
+              return { ...e, participants: updatedParticipants, status: 'upcoming' }; // Status 'upcoming' is just current schema
+            }
+          }
+          return e;
+        });
+
+        return changed ? newEvents : prevEvents;
+      });
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user.id]);
 
   // Filter events for the current user
   const userEvents = events.filter(e => 
@@ -337,12 +449,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const checkIn = (eventId: string) => {
+    const now = new Date();
     setEvents(prev => prev.map(e => {
       if (e.id === eventId) {
-        const updatedParticipants = e.participants.map(p => 
-          p.id === user.id ? { ...p, status: 'checked-in' as ParticipantStatus } : p
-        );
-        return { ...e, participants: updatedParticipants };
+        const [hours, minutes] = e.time.split(':').map(Number);
+        const eventStartTime = new Date();
+        eventStartTime.setHours(hours, minutes, 0, 0);
+        
+        const diffInMinutes = (now.getTime() - eventStartTime.getTime()) / (1000 * 60);
+        
+        if (diffInMinutes <= 15) {
+          const updatedParticipants = e.participants.map(p => 
+            p.id === user.id ? { ...p, status: 'checked-in' as ParticipantStatus, checkInTime: now.getTime() } : p
+          );
+          return { ...e, participants: updatedParticipants };
+        } else {
+          return e;
+        }
       }
       return e;
     }));
@@ -420,7 +543,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       user,
-      users,
+      users: usersWithStats,
       events: userEvents,
       notifications: userNotifications,
       isAuthenticated,

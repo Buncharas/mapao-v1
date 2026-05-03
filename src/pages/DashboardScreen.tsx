@@ -13,26 +13,28 @@ export function DashboardScreen() {
   const navigate = useNavigate();
   const { events, updateEventStatus, user, users } = useApp();
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date('2026-04-24'));
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   // Format as YYYY-MM-DD for comparison with event data
   const selectedDateStr = formatDate(selectedDate);
+  const todayStr = formatDate(new Date());
 
-  // Generate 7 days for the strip starting from the selected date (or around it)
-  // To keep existing behavior, we'll show 5 days starting from selectedDate
+  // Generate 5 days for the strip starting from today
   const days = useMemo(() => {
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(selectedDate);
-      d.setDate(selectedDate.getDate() + i);
+    const today = new Date();
+    return Array.from({ length: 5 }).map((_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dStr = formatDate(d);
       return {
         day: d.toLocaleDateString('en-US', { weekday: 'short' }),
         date: d.getDate().toString(),
-        fullDate: d.toISOString().split('T')[0],
-        active: i === 0
+        fullDate: dStr,
+        active: dStr === selectedDateStr
       };
     });
-  }, [selectedDate]);
+  }, [selectedDateStr]);
 
   const invitations = events.filter(e => {
     const me = e.participants.find(p => p.id === user.id);
@@ -106,7 +108,7 @@ export function DashboardScreen() {
       <main className="pt-24 px-4 space-y-8 max-w-lg mx-auto">
         <section className="space-y-4">
           <h2 className="font-headline text-2xl font-extrabold text-on-surface tracking-tight px-2">
-            {selectedDateStr === new Date('2026-04-24').toISOString().split('T')[0] 
+            {selectedDateStr === todayStr 
               ? 'Today' 
               : selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </h2>
@@ -333,7 +335,7 @@ export function DashboardScreen() {
                 <div className="mt-auto pt-8">
                   <button 
                     onClick={() => {
-                      setSelectedDate(new Date('2026-04-24'));
+                      setSelectedDate(new Date());
                       setIsCalendarOpen(false);
                     }}
                     className="w-full py-4 bg-surface-container-high text-primary font-bold rounded-2xl active:scale-95 transition-all text-sm uppercase tracking-widest"
@@ -375,7 +377,7 @@ function CalendarView({ selectedDate, events, onSelect }: { selectedDate: Date, 
   };
 
   const isToday = (d: Date) => {
-    return formatDate(d) === '2026-04-24';
+    return formatDate(d) === formatDate(new Date());
   };
 
   const isSelected = (d: Date) => {

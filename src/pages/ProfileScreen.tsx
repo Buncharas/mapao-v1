@@ -3,16 +3,54 @@ import { IMAGES } from '../constants';
 import { BottomNav } from '../components/BottomNav';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getAvatarColor, getInitials, cn, bannerGradients } from '../lib/utils';
 import { SettingsPanel } from '../components/SettingsPanel';
 import { EditProfileModal } from '../components/EditProfileModal';
 
-type AvailabilityStatus = 'Definitely' | 'Probably' | 'Unavailable';
+type AvailabilityStatus = 'none' | 'definitely' | 'probably' | 'unavailable';
 
 export function ProfileScreen() {
-  const { user, logout, isSettingsOpen, toggleSettings } = useApp();
+  const { user, events, logout, isSettingsOpen, toggleSettings } = useApp();
   const [isEditing, setIsEditing] = useState(false);
+
+  // Calculation logic as requested
+  const userEvents = events.filter(event =>
+    event.hostId === user.id ||
+    event.participants.some(p => p.id === user.id && ['joined', 'checked-in', 'late', 'missed'].includes(p.status))
+  );
+
+  const pastEvents = userEvents.filter(event => {
+    // Combine date and time. Assuming event.date is YYYY-MM-DD
+    const eventDateTime = new Date(`${event.date}T${event.time}`);
+    // If invalid date (e.g. date string is "Mon", we fallback to current date comparison)
+    if (isNaN(eventDateTime.getTime())) {
+      const [hours, minutes] = event.time.split(':').map(Number);
+      const today = new Date();
+      today.setHours(hours, minutes, 0, 0);
+      return today < new Date();
+    }
+    return eventDateTime < new Date();
+  });
+
+  const totalAppointments = pastEvents.length;
+
+  const onTimeCount = pastEvents.filter(event => {
+    const p = event.participants.find(part => part.id === user.id);
+    return p?.status === "checked-in";
+  }).length;
+
+  const reliabilityScore = totalAppointments > 0
+    ? Math.round((onTimeCount / totalAppointments) * 100)
+    : 0;
+
+  useEffect(() => {
+    console.log("DEBUG - App Stats Calculation:");
+    console.log("events:", events);
+    console.log("userEvents:", userEvents);
+    console.log("pastEvents:", pastEvents);
+    console.log("Calculated:", { totalAppointments, onTimeCount, reliabilityScore });
+  }, [events, user.id, totalAppointments, onTimeCount, reliabilityScore]);
 
   const colors = getAvatarColor(user.id, user.avatarColorIndex);
   const currentBanner = bannerGradients[user.bannerGradientIndex || 0];
@@ -21,26 +59,48 @@ export function ProfileScreen() {
     const saved = localStorage.getItem(`mapao_availability_${user.id}`);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Normalize: if any slot is missing or null, treat it as 'none'
+        const normalized: Record<string, AvailabilityStatus[]> = {};
+        ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => {
+          normalized[day] = (parsed[day] || ['none', 'none', 'none']).map((val: string) => 
+            (val === 'definitely' || val === 'probably' || val === 'unavailable') ? val as AvailabilityStatus : 'none'
+          );
+        });
+        return normalized;
       } catch (e) {
         console.error('Failed to parse availability', e);
       }
     }
     return {
-      Monday: ['Unavailable', 'Unavailable', 'Unavailable'],
-      Tuesday: ['Unavailable', 'Unavailable', 'Unavailable'],
-      Wednesday: ['Unavailable', 'Unavailable', 'Unavailable'],
-      Thursday: ['Unavailable', 'Unavailable', 'Unavailable'],
-      Friday: ['Unavailable', 'Unavailable', 'Unavailable'],
+      Monday: ['none', 'none', 'none'],
+      Tuesday: ['none', 'none', 'none'],
+      Wednesday: ['none', 'none', 'none'],
+      Thursday: ['none', 'none', 'none'],
+      Friday: ['none', 'none', 'none'],
     };
   });
 
   const toggleStatus = (day: string, index: number) => {
-    const statuses: AvailabilityStatus[] = ['Definitely', 'Probably', 'Unavailable'];
     setAvailability(prev => {
-      const newDay = [...prev[day]];
-      const currentIdx = statuses.indexOf(newDay[index]);
-      newDay[index] = statuses[(currentIdx + 1) % 3];
+      const current = prev[day] ? prev[day][index] : 'none';
+      let next: AvailabilityStatus;
+
+      // Interaction Logic:
+      // None -> Definitely
+      // Definitely -> Probably -> Unavailable -> Definitely (cycle)
+      if (current === 'none' || !current) {
+        next = 'definitely';
+      } else if (current === 'definitely') {
+        next = 'probably';
+      } else if (current === 'probably') {
+        next = 'unavailable';
+      } else {
+        next = 'definitely';
+      }
+
+      const newDay = [...(prev[day] || ['none', 'none', 'none'])];
+      newDay[index] = next;
       const newState = { ...prev, [day]: newDay };
       localStorage.setItem(`mapao_availability_${user.id}`, JSON.stringify(newState));
       return newState;
@@ -142,12 +202,12 @@ export function ProfileScreen() {
                       className="stroke-primary"
                       strokeWidth="6"
                       strokeDasharray="351.85"
-                      strokeDashoffset={351.85 * (1 - user.reliability / 100)}
+                      strokeDashoffset={351.85 * (1 - reliabilityScore / 100)}
                       strokeLinecap="round"
                     />
                   </svg>
                   <div className="flex flex-col items-center">
-                    <span className="text-3xl font-black text-on-surface leading-none">{user.reliability}%</span>
+                    <span className="text-3xl font-black text-on-surface leading-none">{reliabilityScore}%</span>
                   </div>
                 </div>
                 <p className="text-[10px] font-bold text-on-surface-variant mt-4 uppercase tracking-[0.2em] text-center">Reliability Score</p>
@@ -156,11 +216,11 @@ export function ProfileScreen() {
             <div className="space-y-3">
               <div className="bg-surface-container-lowest p-3 rounded-lg flex justify-between items-center">
                 <span className="text-sm text-on-surface-variant font-medium">Total Appointments</span>
-                <span className="font-bold text-primary">{user.appointments}</span>
+                <span className="font-bold text-primary">{totalAppointments}</span>
               </div>
               <div className="bg-surface-container-lowest p-3 rounded-lg flex justify-between items-center">
                 <span className="text-sm text-on-surface-variant font-medium">On-Time Count</span>
-                <span className="font-bold text-secondary">{user.onTime}</span>
+                <span className="font-bold text-secondary">{onTimeCount}</span>
               </div>
             </div>
           </section>
@@ -228,16 +288,20 @@ export function ProfileScreen() {
 
 function StatusChip({ status, onClick }: { status: AvailabilityStatus; onClick: () => void }) {
   const styles = {
-    Definitely: "bg-primary/20 text-primary border-primary/20",
-    Probably: "bg-secondary-container/50 text-on-secondary-container border-secondary-container",
-    Unavailable: "bg-surface-variant/40 text-on-surface-variant opacity-60 border-outline-variant",
+    none: "bg-surface-container-highest/20 text-on-surface-variant/30 border-dashed border-outline-variant",
+    definitely: "bg-primary/20 text-primary border-primary/20",
+    probably: "bg-secondary-container/50 text-on-secondary-container border-secondary-container",
+    unavailable: "bg-surface-variant/40 text-on-surface-variant opacity-60 border-outline-variant",
   };
   return (
     <button 
       onClick={onClick}
-      className={`py-1.5 px-2 rounded-full text-center text-[11px] font-bold w-full shadow-sm border transition-all active:scale-95 ${styles[status]}`}
+      className={cn(
+        "py-1.5 px-2 rounded-full text-center text-[11px] font-bold w-full shadow-sm border transition-all active:scale-95",
+        styles[status]
+      )}
     >
-      {status}
+      {status === 'none' ? 'None' : status.charAt(0).toUpperCase() + status.slice(1)}
     </button>
   );
 }

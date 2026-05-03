@@ -70,9 +70,27 @@ export function EventDetailScreen() {
   const isCheckedIn = event.participants.some(p => p.id === user.id && p.status === 'checked-in');
   const me = event.participants.find(p => p.id === user.id);
   const isPending = me?.status === 'pending';
+  const isMissed = me?.status === 'missed';
   const isCancelled = event.status === 'cancelled';
 
   const isHost = event.hostId === user.id;
+
+  // Time-based checks
+  const [isWindowValid, setIsWindowValid] = useState(true);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const [hours, minutes] = event.time.split(':').map(Number);
+      const eventStartTime = new Date();
+      eventStartTime.setHours(hours, minutes, 0, 0);
+      
+      const diffInMinutes = (now.getTime() - eventStartTime.getTime()) / (1000 * 60);
+      setIsWindowValid(diffInMinutes <= 15);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [event.time]);
+
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
@@ -226,11 +244,24 @@ export function EventDetailScreen() {
           >
             {isHost ? (
               <button 
-                onClick={() => setShowQR(true)}
-                className="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary p-6 rounded-[2.5rem] shadow-active hover:-translate-y-1 transition-all flex items-center justify-center gap-4 active:scale-95"
+                onClick={() => {
+                  if (isWindowValid) {
+                    setShowQR(true);
+                    if (!isCheckedIn) checkIn(event.id);
+                  }
+                }}
+                disabled={!isWindowValid}
+                className={cn(
+                  "w-full p-6 rounded-[2.5rem] shadow-active transition-all flex items-center justify-center gap-4 active:scale-95",
+                  isWindowValid 
+                    ? "bg-gradient-to-br from-primary to-primary-container text-on-primary hover:-translate-y-1" 
+                    : "bg-surface-container-highest text-on-surface-variant/40"
+                )}
               >
                 <QrCode className="w-7 h-7" />
-                <span className="font-headline text-xl font-bold tracking-tight">Generate QR for Check-in</span>
+                <span className="font-headline text-xl font-bold tracking-tight">
+                  {isWindowValid ? 'Generate QR for Check-in' : 'Check-in Window Closed'}
+                </span>
               </button>
             ) : isPending ? (
               <div className="flex flex-col gap-3">
@@ -265,13 +296,29 @@ export function EventDetailScreen() {
             ) : isCheckedIn ? (
               <div className="w-full bg-surface-container-lowest border border-success/30 p-5 rounded-[2.5rem] shadow-tactile flex items-center justify-center gap-3">
                 <CheckCircle2 className="w-6 h-6 text-success" />
-                <span className="font-headline text-lg font-bold text-on-surface">Checked In Successfully</span>
+                <div className="flex flex-col">
+                  <span className="font-headline text-lg font-bold text-on-surface">Checked In Successfully</span>
+                  {me?.checkInTime && <span className="text-[10px] font-mono text-on-surface-variant uppercase">At {new Date(me.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+                </div>
+              </div>
+            ) : isMissed ? (
+              <div className="w-full bg-error/10 border border-error/30 p-6 rounded-[2.5rem] shadow-inner flex items-center justify-center gap-4">
+                <AlertCircle className="w-7 h-7 text-error" />
+                <div className="text-left">
+                  <p className="font-headline text-lg font-bold text-error leading-tight">Missed Event</p>
+                  <p className="text-[10px] font-bold text-error/60 uppercase tracking-widest">Attendance window closed</p>
+                </div>
               </div>
             ) : (
               <button 
                 onClick={handleScan}
-                disabled={scanning}
-                className="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary p-6 rounded-[2.5rem] shadow-active hover:-translate-y-1 transition-all flex items-center justify-center gap-4 active:scale-95 disabled:opacity-70"
+                disabled={scanning || !isWindowValid}
+                className={cn(
+                  "w-full p-6 rounded-[2.5rem] shadow-active transition-all flex items-center justify-center gap-4 active:scale-95 disabled:opacity-70",
+                  isWindowValid 
+                    ? "bg-gradient-to-br from-primary to-primary-container text-on-primary hover:-translate-y-1"
+                    : "bg-surface-container-highest text-on-surface-variant/40"
+                )}
               >
                 <AnimatePresence mode="wait">
                   {scanning ? (
@@ -283,6 +330,16 @@ export function EventDetailScreen() {
                     >
                       <Loader2 className="w-7 h-7 animate-spin" />
                       <span className="font-headline text-xl font-bold tracking-tight">Scanning QR...</span>
+                    </motion.div>
+                  ) : !isWindowValid ? (
+                    <motion.div 
+                      key="closed"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="flex items-center gap-3"
+                    >
+                      <AlertCircle className="w-7 h-7" />
+                      <span className="font-headline text-xl font-bold tracking-tight">Check-in Closed</span>
                     </motion.div>
                   ) : (
                     <motion.div 
@@ -437,6 +494,12 @@ function StatusBadge({ status, lateTime }: { status: string, lateTime?: string }
     <div className="flex items-center gap-1 bg-error-container text-on-error-container px-3 py-1 rounded-full">
       <AlertCircle className="w-3 h-3" />
       <span className="text-[10px] font-bold uppercase tracking-widest">Late {lateTime}</span>
+    </div>
+  );
+  if (status === 'missed') return (
+    <div className="flex items-center gap-1 bg-error/10 text-error px-3 py-1 rounded-full">
+      <AlertCircle className="w-3 h-3" />
+      <span className="text-[10px] font-bold uppercase tracking-widest">Missed</span>
     </div>
   );
   if (status === 'joined') return (
